@@ -9,6 +9,8 @@ import 'package:sqflite_common_ffi/sqflite_ffi.dart';
 import 'db.dart';
 import 'lembretes.dart';
 import 'telas/contas.dart';
+import 'telas/lancamentos.dart';
+import 'telas/resumo.dart';
 
 // ponytail: globais; app de um usuário, sem necessidade de injeção de dependência
 late final Db db;
@@ -62,11 +64,7 @@ class _HomeState extends State<Home> {
       ),
       body: KeyedSubtree(
         key: ValueKey('$_aba-$_versao'),
-        child: [
-          const ContasTela(),
-          const Center(child: Text('Lançamentos')),
-          const Center(child: Text('Resumo')),
-        ][_aba],
+        child: const [ContasTela(), LancamentosTela(), ResumoTela()][_aba],
       ),
       bottomNavigationBar: NavigationBar(
         selectedIndex: _aba,
