@@ -65,7 +65,9 @@ class Db {
       _db.delete('lancamentos', where: 'id = ?', whereArgs: [id]);
 
   Future<Conta?> pagar(Conta c, DateTime dia) => _db.transaction((t) async {
-        await t.update('contas', {'pago_em': iso(dia)}, where: 'id = ?', whereArgs: [c.id]);
+        final n = await t.update('contas', {'pago_em': iso(dia)},
+            where: 'id = ? AND pago_em IS NULL', whereArgs: [c.id]);
+        if (n == 0) return null; // já paga (toque duplo)
         await t.insert(
             'lancamentos',
             Lancamento(

@@ -27,6 +27,11 @@ void main() {
     expect(lerCentavos('0,29'), 29);
     expect(lerCentavos('0'), null);
     expect(lerCentavos('abc'), null);
+    expect(lerCentavos('NaN'), null);
+    expect(lerCentavos('Infinity'), null);
+    expect(lerCentavos('1e20'), null);
+    expect(lerCentavos('1.500'), 150000);
+    expect(lerCentavos('1.234.567'), 123456700);
     expect(centavosTexto(123456), '1234,56');
   });
 

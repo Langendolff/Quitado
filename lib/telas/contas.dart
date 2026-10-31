@@ -87,8 +87,11 @@ class _ContaFormState extends State<ContaForm> {
   late bool _recorrente = widget.conta?.recorrente ?? false;
   late String _categoria = widget.conta?.categoria ?? 'Outros';
 
+  bool _salvando = false;
+
   Future<void> _salvar() async {
-    if (!_form.currentState!.validate()) return;
+    if (_salvando || !_form.currentState!.validate()) return;
+    _salvando = true;
     final c = Conta(
         id: widget.conta?.id, descricao: _descricao.text.trim(),
         valor: lerCentavos(_valor.text)!, vencimento: _vencimento,

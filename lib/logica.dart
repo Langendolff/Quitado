@@ -51,13 +51,18 @@ String reais(int c) {
   return '${c < 0 ? '-' : ''}R\$ $inteiro,$cent';
 }
 
-/// "1.234,56" → 123456. Sem vírgula, o ponto é decimal ("12.50" → 1250).
-/// Retorna null se inválido ou <= 0.
+/// "1.234,56" → 123456. Sem vírgula, o ponto é decimal ("12.50" → 1250),
+/// exceto milhar bem formado ("1.500" → 150000).
+/// Retorna null se inválido, <= 0 ou absurdo (> 1e10).
 int? lerCentavos(String t) {
   var s = t.trim();
-  s = s.contains(',') ? s.replaceAll('.', '').replaceAll(',', '.') : s;
+  if (s.contains(',')) {
+    s = s.replaceAll('.', '').replaceAll(',', '.');
+  } else if (RegExp(r'^\d{1,3}(\.\d{3})+$').hasMatch(s)) {
+    s = s.replaceAll('.', '');
+  }
   final v = double.tryParse(s);
-  if (v == null || v <= 0) return null;
+  if (v == null || !v.isFinite || v <= 0 || v > 1e10) return null;
   return (v * 100).round();
 }
 

@@ -37,6 +37,16 @@ void main() {
     expect(abertas.map((c) => c.toMap()), [nova.toMap()]);
   });
 
+  test('pagar duas vezes paga uma só', () async {
+    final c = conta(recorrente: true);
+    final id = await db.salvarConta(c);
+    await db.pagar(c.comId(id), DateTime(2026, 10, 18));
+    final segunda = await db.pagar(c.comId(id), DateTime(2026, 10, 18));
+    expect(segunda, isNull);
+    expect(await db.lancamentosDoMes(2026, 10), hasLength(1));
+    expect(await db.contasEmAberto(), hasLength(1));
+  });
+
   test('editar e excluir', () async {
     final id = await db.salvarConta(conta());
     await db.salvarConta(Conta(
@@ -52,25 +62,24 @@ void main() {
     await db.salvarLancamento(Lancamento(
         tipo: 'receita', descricao: 'Salário', valor: 500000,
         data: DateTime(2026, 10, 5), categoria: 'Salário'));
-    final json = jsonEncode(await db.exportar(3));
-    final antesContas = (await db.contasEmAberto()).map((c) => c.toMap()).toList();
-    final antesLancs = (await db.lancamentosDoMes(2026, 10)).map((l) => l.toMap()).toList();
+    final paga = conta();
+    await db.pagar(paga.comId(await db.salvarConta(paga)), DateTime(2026, 10, 18));
+    final antes = jsonEncode(await db.exportar(3));
 
     await db.salvarConta(conta()); // sujeira que deve sumir
-    final dias = await db.importar(jsonDecode(json) as Map<String, Object?>);
+    final dias = await db.importar(jsonDecode(antes) as Map<String, Object?>);
 
     expect(dias, 3);
-    expect((await db.contasEmAberto()).map((c) => c.toMap()).toList(), antesContas);
-    expect((await db.lancamentosDoMes(2026, 10)).map((l) => l.toMap()).toList(), antesLancs);
+    expect(jsonEncode(await db.exportar(3)), antes);
   });
 
   test('backup inválido não altera nada', () async {
     await db.salvarConta(conta());
-    expect(() => db.importar({'versao': 2, 'contas': [], 'lancamentos': []}),
+    await expectLater(() => db.importar({'versao': 2, 'contas': [], 'lancamentos': []}),
         throwsFormatException);
-    expect(() => db.importar({'versao': 1, 'contas': [{'x': 1}], 'lancamentos': []}),
+    await expectLater(() => db.importar({'versao': 1, 'contas': [{'x': 1}], 'lancamentos': []}),
         throwsFormatException);
-    expect(
+    await expectLater(
         () => db.importar({
               'versao': 1,
               'contas': [],

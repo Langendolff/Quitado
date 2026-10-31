@@ -23,6 +23,7 @@ class _ConfigTelaState extends State<ConfigTela> {
   Future<void> _mudarDias(int d) async {
     await prefs.setInt('dias_aviso', d);
     await Lembretes.reagendarTodos(await db.contasEmAberto(), d);
+    if (!mounted) return;
     setState(() {});
   }
 
@@ -66,18 +67,22 @@ class _ConfigTelaState extends State<ConfigTela> {
               ],
             ));
     if (ok != true) return;
+    final int dias;
     try {
-      final dias = (await db.importar(dados)).clamp(0, 10); // limite do seletor
-      await prefs.setInt('dias_aviso', dias);
-      await Lembretes.reagendarTodos(await db.contasEmAberto(), dias);
-      setState(() {});
-      if (mounted) _msg('Backup importado');
+      dias = (await db.importar(dados)).clamp(0, 10); // limite do seletor
     } on FormatException catch (e) {
       if (mounted) _msg(e.message);
+      return;
     } catch (_) {
       // erro do sqflite (ids duplicados, NOT NULL): transação desfeita
       if (mounted) _msg('Arquivo de backup inválido');
+      return;
     }
+    await prefs.setInt('dias_aviso', dias);
+    await Lembretes.reagendarTodos(await db.contasEmAberto(), dias);
+    if (!mounted) return;
+    setState(() {});
+    _msg('Backup importado');
   }
 
   @override

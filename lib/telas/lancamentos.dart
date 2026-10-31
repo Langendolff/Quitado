@@ -92,8 +92,11 @@ class _LancamentoFormState extends State<LancamentoForm> {
   late DateTime _data = widget.lancamento?.data ?? hoje();
   late String _categoria = widget.lancamento?.categoria ?? 'Outros';
 
+  bool _salvando = false;
+
   Future<void> _salvar() async {
-    if (!_form.currentState!.validate()) return;
+    if (_salvando || !_form.currentState!.validate()) return;
+    _salvando = true;
     await db.salvarLancamento(Lancamento(
         id: widget.lancamento?.id, tipo: _tipo, descricao: _descricao.text.trim(),
         valor: lerCentavos(_valor.text)!, data: _data, categoria: _categoria,

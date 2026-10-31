@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:io';
 
 import 'package:flutter_local_notifications/flutter_local_notifications.dart';
@@ -19,16 +20,19 @@ class Lembretes {
     await _plugin.initialize(
         settings: const InitializationSettings(
             android: AndroidInitializationSettings('@mipmap/ic_launcher')));
-    await _plugin
+    unawaited(_plugin
         .resolvePlatformSpecificImplementation<AndroidFlutterLocalNotificationsPlugin>()
-        ?.requestNotificationsPermission();
+        ?.requestNotificationsPermission() ?? Future.value());
   }
 
   static Future<void> agendar(Conta c, int dias) async {
     if (!suportado || c.id == null || c.pagoEm != null) return;
     final v = c.vencimento;
-    final quando = DateTime(v.year, v.month, v.day - dias, 9);
-    if (quando.isBefore(DateTime.now())) return;
+    var quando = DateTime(v.year, v.month, v.day - dias, 9);
+    if (quando.isBefore(DateTime.now())) {
+      if (v.isBefore(hoje())) return;
+      quando = DateTime.now().add(const Duration(minutes: 1)); // dentro da janela de aviso
+    }
     // ponytail: instante local convertido para UTC; dispensa descobrir o fuso do aparelho
     await _plugin.zonedSchedule(
       id: c.id!,
