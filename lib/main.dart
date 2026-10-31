@@ -8,6 +8,9 @@ import 'package:sqflite_common_ffi/sqflite_ffi.dart';
 
 import 'db.dart';
 import 'lembretes.dart';
+import 'logica.dart';
+import 'models.dart';
+import 'telas/config.dart';
 import 'telas/contas.dart';
 import 'telas/lancamentos.dart';
 import 'telas/resumo.dart';
@@ -28,6 +31,29 @@ Future<void> main() async {
   prefs = await SharedPreferences.getInstance();
   await Lembretes.iniciar();
   runApp(const App());
+}
+
+/// Linux não agenda notificações: ao abrir, lista atrasadas e próximas.
+Future<void> avisoDesktop(BuildContext context) async {
+  final h = hoje();
+  final lista = (await db.contasEmAberto())
+      .where((c) => situacao(c, h, diasAviso) != Situacao.normal)
+      .toList();
+  if (lista.isEmpty || !context.mounted) return;
+  await showDialog<void>(
+    context: context,
+    builder: (ctx) => AlertDialog(
+      title: const Text('Contas para pagar'),
+      content: SingleChildScrollView(
+        child: Column(crossAxisAlignment: CrossAxisAlignment.start, mainAxisSize: MainAxisSize.min, children: [
+          for (final c in lista)
+            Text('${dataBr(c.vencimento)}  ${c.descricao}  ${reais(c.valor)}',
+                style: TextStyle(color: c.vencimento.isBefore(h) ? Colors.red : null)),
+        ]),
+      ),
+      actions: [TextButton(onPressed: () => Navigator.pop(ctx), child: const Text('OK'))],
+    ),
+  );
 }
 
 class App extends StatelessWidget {
@@ -54,13 +80,31 @@ class Home extends StatefulWidget {
 
 class _HomeState extends State<Home> {
   int _aba = 0;
-  final int _versao = 0; // muda após Configurações para recarregar a aba
+  int _versao = 0; // muda após Configurações para recarregar a aba
+
+  @override
+  void initState() {
+    super.initState();
+    if (!Lembretes.suportado) {
+      WidgetsBinding.instance.addPostFrameCallback((_) => avisoDesktop(context));
+    }
+  }
 
   @override
   Widget build(BuildContext context) {
     return Scaffold(
       appBar: AppBar(
         title: Text(const ['Contas', 'Lançamentos', 'Resumo'][_aba]),
+        actions: [
+          IconButton(
+            icon: const Icon(Icons.settings),
+            onPressed: () async {
+              await Navigator.push(
+                  context, MaterialPageRoute(builder: (_) => const ConfigTela()));
+              setState(() => _versao++);
+            },
+          ),
+        ],
       ),
       body: KeyedSubtree(
         key: ValueKey('$_aba-$_versao'),
