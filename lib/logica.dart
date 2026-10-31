@@ -19,28 +19,20 @@ Situacao situacao(Conta c, DateTime hoje, int dias) {
 }
 
 class Resumo {
-  final int receitas, gastos, aPagar;
-  final Map<String, int> porCategoria;
-  const Resumo(this.receitas, this.gastos, this.aPagar, this.porCategoria);
-  int get saldo => receitas - gastos;
+  final int recebido, pago, aPagar;
+  const Resumo(this.recebido, this.pago, this.aPagar);
+  int get sobrou => recebido - pago;
 }
 
-Resumo resumoMes(int ano, int mes, List<Lancamento> lancs, List<Conta> contasAbertas) {
-  bool noMes(DateTime d) => d.year == ano && d.month == mes;
-  var receitas = 0, gastos = 0, aPagar = 0;
-  final porCategoria = <String, int>{};
-  for (final l in lancs.where((l) => noMes(l.data))) {
-    if (l.tipo == 'receita') {
-      receitas += l.valor;
-    } else {
-      gastos += l.valor;
-      porCategoria[l.categoria] = (porCategoria[l.categoria] ?? 0) + l.valor;
-    }
-  }
-  for (final c in contasAbertas.where((c) => noMes(c.vencimento))) {
-    aPagar += c.valor;
-  }
-  return Resumo(receitas, gastos, aPagar, porCategoria);
+int soma(Iterable<int> v) => v.fold(0, (a, b) => a + b);
+
+Resumo resumoMes(int ano, int mes, List<Receita> receitas, List<Conta> pagas, List<Conta> abertas) {
+  bool noMes(DateTime? d) => d != null && d.year == ano && d.month == mes;
+  return Resumo(
+    soma(receitas.where((r) => noMes(r.data)).map((r) => r.valor)),
+    soma(pagas.where((c) => noMes(c.pagoEm)).map((c) => c.valor)),
+    soma(abertas.where((c) => noMes(c.vencimento)).map((c) => c.valor)),
+  );
 }
 
 String reais(int c) {

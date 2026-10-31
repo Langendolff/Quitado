@@ -2,11 +2,10 @@ import 'package:contas/logica.dart';
 import 'package:contas/models.dart';
 import 'package:flutter_test/flutter_test.dart';
 
-Conta conta(DateTime v, {int valor = 1000}) => Conta(
-    descricao: 'x', valor: valor, vencimento: v, recorrente: false, categoria: 'Outros');
+Conta conta(DateTime v, {int valor = 1000, DateTime? pagoEm}) => Conta(
+    descricao: 'x', valor: valor, vencimento: v, recorrente: false, pagoEm: pagoEm);
 
-Lancamento lanc(String tipo, int valor, String cat, DateTime d) =>
-    Lancamento(tipo: tipo, descricao: 'x', valor: valor, data: d, categoria: cat);
+Receita receita(int valor, DateTime d) => Receita(descricao: 'x', valor: valor, data: d);
 
 void main() {
   test('proximoVencimento', () {
@@ -45,26 +44,26 @@ void main() {
 
   test('resumoMes', () {
     final r = resumoMes(2026, 10, [
-      lanc('receita', 500000, 'Salário', DateTime(2026, 10, 5)),
-      lanc('gasto', 10000, 'Alimentação', DateTime(2026, 10, 6)),
-      lanc('gasto', 5000, 'Alimentação', DateTime(2026, 10, 20)),
-      lanc('gasto', 150000, 'Moradia', DateTime(2026, 10, 1)),
-      lanc('gasto', 9999, 'Lazer', DateTime(2026, 11, 1)),
+      receita(500000, DateTime(2026, 10, 5)),
+      receita(20000, DateTime(2026, 10, 30)),
+      receita(9999, DateTime(2026, 11, 1)),
+    ], [
+      conta(DateTime(2026, 9, 30), valor: 150000, pagoEm: DateTime(2026, 10, 1)), // conta pelo dia pago
+      conta(DateTime(2026, 10, 10), valor: 10000, pagoEm: DateTime(2026, 9, 28)),
     ], [
       conta(DateTime(2026, 10, 25), valor: 20000),
       conta(DateTime(2026, 11, 2), valor: 3000),
     ]);
-    expect(r.receitas, 500000);
-    expect(r.gastos, 165000);
-    expect(r.saldo, 335000);
-    expect(r.porCategoria, {'Alimentação': 15000, 'Moradia': 150000});
+    expect(r.recebido, 520000);
+    expect(r.pago, 150000);
+    expect(r.sobrou, 370000);
     expect(r.aPagar, 20000);
   });
 
   test('Conta toMap/fromMap', () {
     final c = Conta(
         id: 3, descricao: 'Luz', valor: 15000, vencimento: DateTime(2026, 3, 5),
-        recorrente: true, categoria: 'Moradia', pagoEm: DateTime(2026, 3, 4));
+        recorrente: true, pagoEm: DateTime(2026, 3, 4));
     expect(Conta.fromMap(c.toMap()).toMap(), c.toMap());
     expect(c.toMap()['vencimento'], '2026-03-05');
   });

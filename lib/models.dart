@@ -1,5 +1,3 @@
-const categorias = ['Moradia', 'Alimentação', 'Transporte', 'Saúde', 'Lazer', 'Salário', 'Outros'];
-
 String iso(DateTime d) => d.toIso8601String().substring(0, 10);
 
 DateTime hoje() {
@@ -15,7 +13,6 @@ class Conta {
   final int valor; // centavos
   final DateTime vencimento;
   final bool recorrente;
-  final String categoria;
   final DateTime? pagoEm;
 
   const Conta({
@@ -24,13 +21,12 @@ class Conta {
     required this.valor,
     required this.vencimento,
     required this.recorrente,
-    required this.categoria,
     this.pagoEm,
   });
 
   Conta comId(int id) => Conta(
       id: id, descricao: descricao, valor: valor, vencimento: vencimento,
-      recorrente: recorrente, categoria: categoria, pagoEm: pagoEm);
+      recorrente: recorrente, pagoEm: pagoEm);
 
   Map<String, Object?> toMap() => {
         'id': id,
@@ -38,7 +34,6 @@ class Conta {
         'valor': valor,
         'vencimento': iso(vencimento),
         'recorrente': recorrente ? 1 : 0,
-        'categoria': categoria,
         'pago_em': pagoEm == null ? null : iso(pagoEm!),
       };
 
@@ -48,47 +43,29 @@ class Conta {
         valor: m['valor'] as int,
         vencimento: DateTime.parse(m['vencimento'] as String),
         recorrente: m['recorrente'] == 1,
-        categoria: m['categoria'] as String,
         pagoEm: _data(m['pago_em']),
       );
 }
 
-class Lancamento {
+class Receita {
   final int? id;
-  final String tipo; // 'receita' | 'gasto'
   final String descricao;
   final int valor; // centavos, positivo
   final DateTime data;
-  final String categoria;
-  final int? contaId;
 
-  const Lancamento({
-    this.id,
-    required this.tipo,
-    required this.descricao,
-    required this.valor,
-    required this.data,
-    required this.categoria,
-    this.contaId,
-  });
+  const Receita({this.id, required this.descricao, required this.valor, required this.data});
 
   Map<String, Object?> toMap() => {
         'id': id,
-        'tipo': tipo,
         'descricao': descricao,
         'valor': valor,
         'data': iso(data),
-        'categoria': categoria,
-        'conta_id': contaId,
       };
 
-  factory Lancamento.fromMap(Map<String, Object?> m) => Lancamento(
+  factory Receita.fromMap(Map<String, Object?> m) => Receita(
         id: m['id'] as int?,
-        tipo: m['tipo'] as String,
         descricao: m['descricao'] as String,
         valor: m['valor'] as int,
         data: DateTime.parse(m['data'] as String),
-        categoria: m['categoria'] as String,
-        contaId: m['conta_id'] as int?,
       );
 }
