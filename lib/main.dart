@@ -126,7 +126,7 @@ class App extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return MaterialApp(
-      title: 'Contas',
+      title: 'Quitado',
       theme: tema(Brightness.light),
       darkTheme: tema(Brightness.dark),
       locale: const Locale('pt', 'BR'),
