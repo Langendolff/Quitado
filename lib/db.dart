@@ -14,7 +14,8 @@ class Db {
       valor INTEGER NOT NULL,
       vencimento TEXT NOT NULL,
       recorrente INTEGER NOT NULL,
-      pago_em TEXT)''');
+      pago_em TEXT,
+      origem INTEGER)''');
     await db.execute('''CREATE TABLE receitas(
       id INTEGER PRIMARY KEY AUTOINCREMENT,
       descricao TEXT NOT NULL,
@@ -25,13 +26,17 @@ class Db {
   static Future<Db> abrir(DatabaseFactory f, String path) async {
     final db = await f.openDatabase(path,
         options: OpenDatabaseOptions(
-          version: 2,
+          version: 3,
           onCreate: (db, _) => _criar(db),
-          // v1 → v2: modelo novo (saldo, sem categorias); dados v1 descartados de propósito
-          onUpgrade: (db, _, _) async {
-            await db.execute('DROP TABLE IF EXISTS lancamentos');
-            await db.execute('DROP TABLE IF EXISTS contas');
-            await _criar(db);
+          onUpgrade: (db, de, _) async {
+            if (de < 2) {
+              // v1 → v2: modelo novo (saldo, sem categorias); dados v1 descartados de propósito
+              await db.execute('DROP TABLE IF EXISTS lancamentos');
+              await db.execute('DROP TABLE IF EXISTS contas');
+              await _criar(db);
+            } else {
+              await db.execute('ALTER TABLE contas ADD COLUMN origem INTEGER');
+            }
           },
         ));
     return Db._(db);
@@ -84,12 +89,42 @@ class Db {
           final n = await t.update('contas', {'pago_em': iso(dia)},
               where: 'id = ? AND pago_em IS NULL', whereArgs: [c.id]);
           if (n == 0 || !c.recorrente) continue;
+          // a próxima volta ao valor cheio, somando o que já foi pago em partes
+          final partes = (await t.rawQuery(
+                  'SELECT COALESCE(SUM(valor), 0) AS s FROM contas WHERE origem = ? AND recorrente = 0 AND pago_em IS NOT NULL',
+                  [c.id]))
+              .first['s'] as int;
           final nova = Conta(
-              descricao: c.descricao, valor: c.valor,
-              vencimento: proximoVencimento(c.vencimento), recorrente: true);
+              descricao: c.descricao, valor: c.valor + partes,
+              vencimento: proximoVencimento(c.vencimento), recorrente: true, origem: c.id);
           novas.add(nova.comId(await t.insert('contas', nova.toMap())));
         }
         return novas;
+      });
+
+  /// Paga só [valor] de [c]: vira uma conta paga à parte e [c] fica com o resto.
+  Future<void> pagarParte(Conta c, int valor, DateTime dia) => _db.transaction((t) async {
+        final n = await t.rawUpdate(
+            'UPDATE contas SET valor = valor - ? WHERE id = ? AND pago_em IS NULL AND valor > ?',
+            [valor, c.id, valor]);
+        if (n == 0) throw StateError('Valor maior que o da conta');
+        await t.insert('contas', Conta(
+                descricao: '${c.descricao} (parcial)', valor: valor, vencimento: c.vencimento,
+                recorrente: false, pagoEm: dia, origem: c.id)
+            .toMap());
+      });
+
+  /// Volta [c] para em aberto. Some com a próxima recorrente que ela gerou (se ainda
+  /// em aberto); um pagamento parcial volta a somar na conta original.
+  Future<void> desfazerPagamento(Conta c) => _db.transaction((t) async {
+        await t.delete('contas', where: 'origem = ? AND pago_em IS NULL', whereArgs: [c.id]);
+        if (c.parcial &&
+            await t.rawUpdate('UPDATE contas SET valor = valor + ? WHERE id = ? AND pago_em IS NULL',
+                    [c.valor, c.origem]) > 0) {
+          await t.delete('contas', where: 'id = ?', whereArgs: [c.id]);
+          return;
+        }
+        await t.update('contas', {'pago_em': null}, where: 'id = ?', whereArgs: [c.id]);
       });
 
   Future<Map<String, Object?>> exportar(int diasAviso) async => {

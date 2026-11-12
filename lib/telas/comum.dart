@@ -87,3 +87,38 @@ final botaoGrande = FilledButton.styleFrom(
     padding: const EdgeInsets.symmetric(horizontal: 20),
     textStyle: const TextStyle(fontFamily: 'Inter', fontSize: 16, fontWeight: FontWeight.w600),
     shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(18)));
+
+/// Diálogo com um campo de valor. Retorna centavos ou null se cancelado.
+Future<int?> pedirValor(BuildContext context, String titulo, {int? inicial, int? menorQue}) {
+  final form = GlobalKey<FormState>();
+  final ctrl = TextEditingController(text: inicial == null ? '' : centavosTexto(inicial));
+  void ok(BuildContext ctx) {
+    if (form.currentState!.validate()) Navigator.pop(ctx, lerCentavos(ctrl.text));
+  }
+
+  return showDialog<int>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+            title: Text(titulo),
+            content: Form(
+              key: form,
+              child: TextFormField(
+                controller: ctrl,
+                autofocus: true,
+                decoration: const InputDecoration(labelText: 'Valor', prefixText: 'R\$ '),
+                keyboardType: const TextInputType.numberWithOptions(decimal: true),
+                onFieldSubmitted: (_) => ok(ctx),
+                validator: (v) {
+                  final c = lerCentavos(v ?? '');
+                  if (c == null) return 'Valor inválido';
+                  if (menorQue != null && c >= menorQue) return 'Precisa ser menor que ${reais(menorQue)}';
+                  return null;
+                },
+              ),
+            ),
+            actions: [
+              TextButton(onPressed: () => Navigator.pop(ctx), child: const Text('Cancelar')),
+              TextButton(onPressed: () => ok(ctx), child: const Text('OK')),
+            ],
+          ));
+}

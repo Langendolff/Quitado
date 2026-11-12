@@ -14,6 +14,8 @@ class Conta {
   final DateTime vencimento;
   final bool recorrente;
   final DateTime? pagoEm;
+  /// Conta de onde esta saiu: a anterior (recorrente) ou a original (pagamento parcial).
+  final int? origem;
 
   const Conta({
     this.id,
@@ -22,11 +24,15 @@ class Conta {
     required this.vencimento,
     required this.recorrente,
     this.pagoEm,
+    this.origem,
   });
 
   Conta comId(int id) => Conta(
       id: id, descricao: descricao, valor: valor, vencimento: vencimento,
-      recorrente: recorrente, pagoEm: pagoEm);
+      recorrente: recorrente, pagoEm: pagoEm, origem: origem);
+
+  /// Pedaço pago de outra conta (ver Db.pagarParte).
+  bool get parcial => origem != null && !recorrente;
 
   Map<String, Object?> toMap() => {
         'id': id,
@@ -35,6 +41,7 @@ class Conta {
         'vencimento': iso(vencimento),
         'recorrente': recorrente ? 1 : 0,
         'pago_em': pagoEm == null ? null : iso(pagoEm!),
+        'origem': origem,
       };
 
   factory Conta.fromMap(Map<String, Object?> m) => Conta(
@@ -44,6 +51,7 @@ class Conta {
         vencimento: DateTime.parse(m['vencimento'] as String),
         recorrente: m['recorrente'] == 1,
         pagoEm: _data(m['pago_em']),
+        origem: m['origem'] as int?,
       );
 }
 

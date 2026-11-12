@@ -49,6 +49,33 @@ void main() {
     expect(await db.contasEmAberto(), hasLength(1));
   });
 
+  test('desfazer pagamento volta pra aberto e some com a próxima recorrente', () async {
+    final c = await nova(recorrente: true);
+    await db.pagar([c], DateTime(2026, 10, 18));
+    await db.desfazerPagamento(c);
+    expect((await db.contasEmAberto()).map((c) => c.toMap()), [c.toMap()]);
+    expect(await db.saldo(), 0);
+  });
+
+  test('pagar parte, pagar o resto, desfazer a parte', () async {
+    final c = await nova(recorrente: true, valor: 10000);
+    await db.pagarParte(c, 3000, DateTime(2026, 10, 10));
+    await expectLater(() => db.pagarParte(c, 7000, DateTime(2026, 10, 10)), throwsStateError);
+    final resto = (await db.contasEmAberto()).single;
+    expect(resto.valor, 7000);
+    expect(await db.saldo(), -3000);
+
+    final parte = (await db.pagasDoMes(2026, 10)).single;
+    await db.desfazerPagamento(parte);
+    expect((await db.contasEmAberto()).single.valor, 10000);
+    expect(await db.pagasDoMes(2026, 10), isEmpty);
+
+    await db.pagarParte(c, 3000, DateTime(2026, 10, 10));
+    final proxima = (await db.pagar([(await db.contasEmAberto()).single], DateTime(2026, 10, 18))).single;
+    expect(proxima.valor, 10000); // volta ao valor cheio
+    expect(await db.saldo(), -10000);
+  });
+
   test('editar e excluir', () async {
     final c = await nova();
     await db.salvarConta(Conta(
@@ -96,6 +123,26 @@ void main() {
     expect(await v2.contasEmAberto(), isEmpty);
     expect(await v2.saldo(), 0);
     await v2.fechar();
+    await databaseFactoryFfi.deleteDatabase(path);
+  });
+
+  test('migração v2 → v3 mantém os dados', () async {
+    final path = '${(await databaseFactoryFfi.getDatabasesPath())}/migracao_v3_test.db';
+    await databaseFactoryFfi.deleteDatabase(path);
+    final v2 = await databaseFactoryFfi.openDatabase(path,
+        options: OpenDatabaseOptions(version: 2, onCreate: (d, _) async {
+          await d.execute('CREATE TABLE contas(id INTEGER PRIMARY KEY AUTOINCREMENT, descricao TEXT NOT NULL, '
+              'valor INTEGER NOT NULL, vencimento TEXT NOT NULL, recorrente INTEGER NOT NULL, pago_em TEXT)');
+          await d.execute('CREATE TABLE receitas(id INTEGER PRIMARY KEY AUTOINCREMENT, descricao TEXT NOT NULL, '
+              'valor INTEGER NOT NULL, data TEXT NOT NULL)');
+          await d.insert('contas', {'descricao': 'Luz', 'valor': 100, 'vencimento': '2026-10-20', 'recorrente': 1});
+        }));
+    await v2.close();
+    final v3 = await Db.abrir(databaseFactoryFfi, path);
+    final c = (await v3.contasEmAberto()).single;
+    expect(c.descricao, 'Luz');
+    expect((await v3.pagar([c], DateTime(2026, 10, 18))).single.origem, c.id);
+    await v3.fechar();
     await databaseFactoryFfi.deleteDatabase(path);
   });
 }

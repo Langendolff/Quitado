@@ -4,6 +4,7 @@ import '../logica.dart';
 import '../main.dart';
 import '../models.dart';
 import 'comum.dart';
+import 'contas.dart';
 
 class ResumoTela extends StatefulWidget {
   const ResumoTela({super.key});
@@ -72,6 +73,8 @@ class _ResumoTelaState extends State<ResumoTela> {
         ]),
         const SizedBox(height: 24),
         Text('Pago no mês', style: t.titleMedium),
+        if (pagas.isNotEmpty)
+          Text('Toque para desfazer um pagamento', style: t.bodySmall?.copyWith(color: cs.onSurfaceVariant)),
         const SizedBox(height: 8),
         if (pagas.isEmpty) const Vazio('Nada pago neste mês'),
         if (pagas.isNotEmpty)
@@ -81,6 +84,11 @@ class _ResumoTelaState extends State<ResumoTela> {
                 title: Text(c.descricao, style: t.titleSmall),
                 subtitle: Text('Pago em ${dataBr(c.pagoEm!).substring(0, 5)}'),
                 trailing: Text('− ${reais(c.valor)}', style: t.titleSmall?.copyWith(fontFeatures: tnum)),
+                onTap: () async {
+                  if (!await confirmar(context, 'Desfazer pagamento de ${c.descricao}?', 'Desfazer')) return;
+                  await desfazerPagamentos([c]);
+                  if (mounted) setState(() => _dados = _carregar());
+                },
               ),
           ]),
       ]);

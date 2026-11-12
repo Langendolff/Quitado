@@ -3,10 +3,13 @@ import 'models.dart';
 const meses = ['Janeiro', 'Fevereiro', 'Março', 'Abril', 'Maio', 'Junho', 'Julho',
   'Agosto', 'Setembro', 'Outubro', 'Novembro', 'Dezembro'];
 
-DateTime proximoVencimento(DateTime v) {
-  final ultimoDia = DateTime(v.year, v.month + 2, 0).day; // dia 0 = último do mês anterior
-  return DateTime(v.year, v.month + 1, v.day > ultimoDia ? ultimoDia : v.day);
+/// Mesmo dia [n] meses depois; cai no último dia se o mês for mais curto.
+DateTime somarMeses(DateTime v, int n) {
+  final ultimoDia = DateTime(v.year, v.month + n + 1, 0).day; // dia 0 = último do mês anterior
+  return DateTime(v.year, v.month + n, v.day > ultimoDia ? ultimoDia : v.day);
 }
+
+DateTime proximoVencimento(DateTime v) => somarMeses(v, 1);
 
 enum Situacao { atrasada, proxima, normal }
 

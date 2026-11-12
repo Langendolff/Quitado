@@ -16,6 +16,12 @@ void main() {
     expect(proximoVencimento(DateTime(2026, 2, 28)), DateTime(2026, 3, 28));
   });
 
+  test('somarMeses', () {
+    expect(somarMeses(DateTime(2026, 1, 31), 1), DateTime(2026, 2, 28));
+    expect(somarMeses(DateTime(2026, 1, 31), 2), DateTime(2026, 3, 31)); // não arrasta o dia 28
+    expect(somarMeses(DateTime(2026, 11, 10), 3), DateTime(2027, 2, 10));
+  });
+
   test('dinheiro', () {
     expect(reais(123456), 'R\$ 1.234,56');
     expect(reais(5), 'R\$ 0,05');

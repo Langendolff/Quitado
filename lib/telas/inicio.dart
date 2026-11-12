@@ -52,10 +52,7 @@ class _InicioTelaState extends State<InicioTela> {
                 conta: c,
                 leading: ContaItem.faixa(context, c),
                 trailing: FilledButton(
-                    onPressed: () async {
-                      await pagarContas(context, [c]);
-                      _recarregar();
-                    },
+                    onPressed: () => pagarContas(context, [c], _recarregar),
                     child: const Text('Pagar')),
                 onTap: () async {
                   if (await editarConta(context, c)) _recarregar();

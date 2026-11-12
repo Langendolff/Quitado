@@ -8,7 +8,7 @@ import 'comum.dart';
 
 String _ddmm(DateTime d) => dataBr(d).substring(0, 5);
 
-Future<void> pagarContas(BuildContext context, List<Conta> contas) async {
+Future<void> pagarContas(BuildContext context, List<Conta> contas, VoidCallback recarregar) async {
   final novas = await db.pagar(contas, hoje());
   for (final c in contas) {
     await Lembretes.cancelar(c.id!);
@@ -16,9 +16,23 @@ Future<void> pagarContas(BuildContext context, List<Conta> contas) async {
   for (final n in novas) {
     await Lembretes.agendar(n, diasAviso);
   }
+  recarregar();
   if (!context.mounted) return;
   ScaffoldMessenger.of(context).showSnackBar(SnackBar(
-      content: Text(contas.length == 1 ? '${contas.single.descricao} paga' : '${contas.length} contas pagas')));
+      content: Text(contas.length == 1 ? '${contas.single.descricao} paga' : '${contas.length} contas pagas'),
+      action: SnackBarAction(
+          label: 'Desfazer',
+          onPressed: () async {
+            await desfazerPagamentos(contas);
+            if (context.mounted) recarregar();
+          })));
+}
+
+Future<void> desfazerPagamentos(List<Conta> contas) async {
+  for (final c in contas) {
+    await db.desfazerPagamento(c);
+  }
+  await Lembretes.reagendarTodos(await db.contasEmAberto(), diasAviso);
 }
 
 Future<bool> editarConta(BuildContext context, [Conta? c]) async =>
@@ -104,10 +118,7 @@ class _ContasTelaState extends State<ContasTela> {
 
   void _alternar(Conta c) => setState(() => _sel.contains(c.id) ? _sel.remove(c.id) : _sel.add(c.id!));
 
-  Future<void> _pagar(List<Conta> contas) async {
-    await pagarContas(context, contas);
-    _recarregar();
-  }
+  Future<void> _pagar(List<Conta> contas) => pagarContas(context, contas, _recarregar);
 
   Widget _check(BuildContext context, bool on) {
     final cs = Theme.of(context).colorScheme;
@@ -209,19 +220,56 @@ class _ContaFormState extends State<ContaForm> {
       text: widget.conta == null ? '' : centavosTexto(widget.conta!.valor));
   late DateTime _vencimento = widget.conta?.vencimento ?? hoje();
   late bool _recorrente = widget.conta?.recorrente ?? false;
+  int _parcelas = 1;
+  // parcelas alteradas à mão; as outras seguem valor e vencimento do topo
+  final _valorParcela = <int, int>{};
+  final _dataParcela = <int, DateTime>{};
 
   bool _salvando = false;
+
+  int _valorDe(int i) => _valorParcela[i] ?? lerCentavos(_valor.text) ?? 0;
+  DateTime _dataDe(int i) => _dataParcela[i] ?? somarMeses(_vencimento, i);
+
+  Future<DateTime?> _escolherData(DateTime inicial) => showDatePicker(
+      context: context, initialDate: inicial, firstDate: DateTime(2000), lastDate: DateTime(2100));
 
   Future<void> _salvar() async {
     if (_salvando || !_form.currentState!.validate()) return;
     _salvando = true;
-    final c = Conta(
-        id: widget.conta?.id, descricao: _descricao.text.trim(),
-        valor: lerCentavos(_valor.text)!, vencimento: _vencimento, recorrente: _recorrente);
-    final id = await db.salvarConta(c);
-    await Lembretes.cancelar(id);
-    await Lembretes.agendar(c.comId(id), diasAviso);
+    final descricao = _descricao.text.trim();
+    final contas = _parcelas == 1
+        ? [
+            Conta(
+                id: widget.conta?.id, descricao: descricao, valor: lerCentavos(_valor.text)!,
+                vencimento: _vencimento, recorrente: _recorrente, origem: widget.conta?.origem)
+          ]
+        : [
+            for (var i = 0; i < _parcelas; i++)
+              Conta(
+                  descricao: '$descricao (${i + 1}/$_parcelas)', valor: _valorDe(i),
+                  vencimento: _dataDe(i), recorrente: false)
+          ];
+    for (final c in contas) {
+      final id = await db.salvarConta(c);
+      await Lembretes.cancelar(id);
+      await Lembretes.agendar(c.comId(id), diasAviso);
+    }
     if (mounted) Navigator.pop(context, true);
+  }
+
+  Future<void> _pagarParte() async {
+    final c = widget.conta!;
+    final v = await pedirValor(context, 'Pagar uma parte', menorQue: c.valor);
+    if (v == null) return;
+    await db.pagarParte(c, v, hoje());
+    await Lembretes.cancelar(c.id!);
+    await Lembretes.agendar(Conta(
+        id: c.id, descricao: c.descricao, valor: c.valor - v, vencimento: c.vencimento,
+        recorrente: c.recorrente), diasAviso);
+    if (!mounted) return;
+    ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('${reais(v)} pagos · faltam ${reais(c.valor - v)}')));
+    Navigator.pop(context, true);
   }
 
   Future<void> _excluir() async {
@@ -233,11 +281,14 @@ class _ContaFormState extends State<ContaForm> {
 
   @override
   Widget build(BuildContext context) {
+    final nova = widget.conta == null;
+    final varias = _parcelas > 1;
+    final t = Theme.of(context).textTheme;
     return Scaffold(
       appBar: AppBar(
-        title: Text(widget.conta == null ? 'Nova conta' : 'Editar conta'),
+        title: Text(nova ? 'Nova conta' : 'Editar conta'),
         actions: [
-          if (widget.conta != null)
+          if (!nova)
             IconButton(icon: const Icon(Icons.delete_outline), tooltip: 'Excluir', onPressed: _excluir),
         ],
       ),
@@ -246,40 +297,97 @@ class _ContaFormState extends State<ContaForm> {
         child: ListView(padding: const EdgeInsets.all(20), children: [
           TextFormField(
             controller: _descricao,
-            autofocus: widget.conta == null,
+            autofocus: nova,
             decoration: const InputDecoration(labelText: 'Descrição'),
             validator: (v) => v == null || v.trim().isEmpty ? 'Obrigatório' : null,
           ),
           const SizedBox(height: 12),
           TextFormField(
             controller: _valor,
-            decoration: const InputDecoration(labelText: 'Valor', prefixText: 'R\$ '),
+            decoration: InputDecoration(labelText: varias ? 'Valor da parcela' : 'Valor', prefixText: 'R\$ '),
             keyboardType: const TextInputType.numberWithOptions(decimal: true),
+            onChanged: varias ? (_) => setState(() {}) : null,
             validator: (v) => lerCentavos(v ?? '') == null ? 'Valor inválido' : null,
           ),
+          if (nova) ...[
+            const SizedBox(height: 12),
+            TextFormField(
+              initialValue: '1',
+              decoration: const InputDecoration(labelText: 'Parcelas'),
+              keyboardType: TextInputType.number,
+              onChanged: (v) {
+                final n = int.tryParse(v.trim());
+                if (n != null && n >= 1 && n <= 360) setState(() => _parcelas = n);
+              },
+              validator: (v) {
+                final n = int.tryParse(v?.trim() ?? '');
+                return n == null || n < 1 || n > 360 ? 'Entre 1 e 360' : null;
+              },
+            ),
+          ],
           const SizedBox(height: 12),
           Card(
             child: Column(children: [
               ListTile(
-                title: const Text('Vencimento'),
+                title: Text(varias ? '1º vencimento' : 'Vencimento'),
                 trailing: Text(dataBr(_vencimento)),
                 onTap: () async {
-                  final d = await showDatePicker(
-                      context: context, initialDate: _vencimento,
-                      firstDate: DateTime(2000), lastDate: DateTime(2100));
+                  final d = await _escolherData(_vencimento);
                   if (d != null) setState(() => _vencimento = d);
                 },
               ),
-              const Divider(height: 1),
-              SwitchListTile(
-                title: const Text('Repete todo mês'),
-                value: _recorrente,
-                onChanged: (v) => setState(() => _recorrente = v),
-              ),
+              if (!varias) ...[
+                const Divider(height: 1),
+                SwitchListTile(
+                  title: const Text('Repete todo mês'),
+                  value: _recorrente,
+                  onChanged: (v) => setState(() => _recorrente = v),
+                ),
+              ],
             ]),
           ),
+          if (varias) ...[
+            const SizedBox(height: 24),
+            Row(mainAxisAlignment: MainAxisAlignment.spaceBetween, children: [
+              Text('Parcelas', style: t.titleMedium),
+              Text('Total ${reais(soma([for (var i = 0; i < _parcelas; i++) _valorDe(i)]))}',
+                  style: t.bodyMedium?.copyWith(fontFeatures: tnum)),
+            ]),
+            const SizedBox(height: 8),
+            Grupo(children: [
+              for (var i = 0; i < _parcelas; i++)
+                ListTile(
+                  title: Text('${i + 1}/$_parcelas'),
+                  subtitle: Text('Vence ${dataBr(_dataDe(i))}'),
+                  onTap: () async {
+                    final d = await _escolherData(_dataDe(i));
+                    if (d != null) setState(() => _dataParcela[i] = d);
+                  },
+                  trailing: TextButton(
+                    onPressed: () async {
+                      final v = await pedirValor(context, 'Parcela ${i + 1}', inicial: _valorDe(i));
+                      if (v != null) setState(() => _valorParcela[i] = v);
+                    },
+                    child: Text(reais(_valorDe(i)), style: const TextStyle(fontFeatures: tnum)),
+                  ),
+                ),
+            ]),
+            const SizedBox(height: 4),
+            Text('Toque na data ou no valor para mudar uma parcela.',
+                style: t.bodySmall?.copyWith(color: Theme.of(context).colorScheme.onSurfaceVariant)),
+          ],
           const SizedBox(height: 24),
-          FilledButton(style: botaoGrande, onPressed: _salvar, child: const Text('Salvar')),
+          FilledButton(
+              style: botaoGrande,
+              onPressed: _salvar,
+              child: Text(varias ? 'Criar $_parcelas parcelas' : 'Salvar')),
+          if (!nova) ...[
+            const SizedBox(height: 12),
+            OutlinedButton(
+                style: OutlinedButton.styleFrom(minimumSize: const Size.fromHeight(52)),
+                onPressed: _pagarParte,
+                child: const Text('Pagar uma parte')),
+          ],
         ]),
       ),
     );
