@@ -1,17 +1,14 @@
-# contas
+# Quitado
 
-A new Flutter project.
+App Flutter (Android/Linux) pra controlar contas a pagar: lembretes de vencimento,
+contas recorrentes e parceladas, receitas, saldo acumulado e pagamento em lote.
 
-## Getting Started
+Os dados ficam só no aparelho (SQLite), com backup/restauração em JSON.
 
-This project is a starting point for a Flutter application.
+## Rodando
 
-A few resources to get you started if this is your first Flutter project:
-
-- [Learn Flutter](https://docs.flutter.dev/get-started/learn-flutter)
-- [Write your first Flutter app](https://docs.flutter.dev/get-started/codelab)
-- [Flutter learning resources](https://docs.flutter.dev/reference/learning-resources)
-
-For help getting started with Flutter development, view the
-[online documentation](https://docs.flutter.dev/), which offers tutorials,
-samples, guidance on mobile development, and a full API reference.
+```sh
+flutter pub get
+flutter run
+flutter test
+```
